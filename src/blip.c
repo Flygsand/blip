@@ -204,7 +204,7 @@ bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void
 {
     short samplebuf[1024];
     int pos;
-    char *emu_err;
+    gme_err_t emu_err;
 
     gme_start_track(emu, track);
     gme_seek(emu, 0);
@@ -329,7 +329,7 @@ int main(int argc, char * const argv[])
                 if (buffer_file(input, &buf, &bufsiz))
                 {
                     Music_Emu *emu;
-                    char *emu_err = gme_open_data(buf, bufsiz, &emu, opts.samplerate);
+                    gme_err_t emu_err = gme_open_data(buf, bufsiz, &emu, opts.samplerate);
                     
                     if (emu_err == NULL)
                     {

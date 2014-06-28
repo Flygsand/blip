@@ -58,6 +58,8 @@ bool init_options(int argc, char * const argv[], struct options_s *opts)
 
     memset(opts, 0, sizeof(struct options_s));
 
+    opts->input = NULL;
+    opts->output = NULL;
     opts->track = -1;
     opts->samplerate = 44100;
     opts->duration = 180;

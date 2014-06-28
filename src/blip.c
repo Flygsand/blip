@@ -24,6 +24,7 @@ struct options_s
     int samplerate;
     int duration;
     int fadeout;
+    double pan;
     bool help;
 };
 
@@ -33,6 +34,7 @@ static struct option optspec[] = {
     {"samplerate", required_argument, 0, 's'},
     {"duration", required_argument, 0, 'd'},
     {"fadeout", required_argument, 0, 'f'},
+    {"pan", required_argument, 0, 'p'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}
 };
@@ -42,7 +44,7 @@ void free_options(struct options_s *opts);
 int open_file(const char *path, int mode);
 int open_enumerated_file(const char *path, int mode, int index);
 bool buffer_file(int fd, void **buf, size_t *bufsiz);
-bool play(Music_Emu *emu, int track, int duration, int fadeout, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
+bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
 ;
 void write_samples(short *samplebuf, size_t samplebufsiz, void *ctx);
 void copy_metadata(const Music_Emu *emu, int track, SNDFILE *sndfile);
@@ -60,10 +62,11 @@ bool init_options(int argc, char * const argv[], struct options_s *opts)
     opts->samplerate = 44100;
     opts->duration = 180;
     opts->fadeout = 5;
+    opts->pan = 0.0;
     opts->help = false;
 
     char opt;
-    while ((opt = getopt_long(argc, argv, "o:t:s:d:f:h", optspec, 0)) != -1)
+    while ((opt = getopt_long(argc, argv, "o:t:s:d:f:p:h", optspec, 0)) != -1)
     {
         switch (opt)
         {
@@ -85,6 +88,10 @@ bool init_options(int argc, char * const argv[], struct options_s *opts)
 
             case 'f':
                 opts->fadeout = atol(optarg);
+                break;
+
+            case 'p':
+                opts->pan = atof(optarg);
                 break;
 
             case 'h':
@@ -193,7 +200,7 @@ bool buffer_file(int fd, void **buf, size_t *bufsiz)
     return true;
 }
 
-bool play(Music_Emu *emu, int track, int duration, int fadeout, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
+bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
 {
     short samplebuf[1024];
     int pos;
@@ -202,6 +209,7 @@ bool play(Music_Emu *emu, int track, int duration, int fadeout, void (*sample_ha
     gme_start_track(emu, track);
     gme_seek(emu, 0);
     gme_set_fade(emu, (duration - fadeout) * 1000L);
+    gme_set_stereo_depth(emu, pan);
 
     while ((pos = gme_tell(emu)) < duration * 1000L)
     {
@@ -350,7 +358,7 @@ int main(int argc, char * const argv[])
 
                                 if (sndfile != NULL)
                                 {
-                                    play(emu, track, opts.duration, opts.fadeout, write_samples, sndfile);
+                                    play(emu, track, opts.duration, opts.fadeout, opts.pan, write_samples, sndfile);
                                     copy_metadata(emu, track, sndfile);
                                     
                                     sf_close(sndfile);

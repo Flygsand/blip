@@ -25,6 +25,7 @@ struct options_s
     int duration;
     int fadeout;
     double pan;
+    gme_equalizer_t *equalizer;
     bool help;
 };
 
@@ -35,16 +36,18 @@ static struct option optspec[] = {
     {"duration", required_argument, 0, 'd'},
     {"fadeout", required_argument, 0, 'f'},
     {"pan", required_argument, 0, 'p'},
+    {"equalizer", required_argument, 0, 'e'},
     {"help", no_argument, 0, 'h'},
     {0, 0, 0, 0}
 };
 
 bool init_options(int argc, char * const argv[], struct options_s *opts);
 void free_options(struct options_s *opts);
+bool parse_equalizer_string(const char *str, gme_equalizer_t **equalizer);
 int open_file(const char *path, int mode);
 int open_enumerated_file(const char *path, int mode, int index);
 bool buffer_file(int fd, void **buf, size_t *bufsiz);
-bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
+bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, gme_equalizer_t const *eq, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
 ;
 void write_samples(short *samplebuf, size_t samplebufsiz, void *ctx);
 void copy_metadata(const Music_Emu *emu, int track, SNDFILE *sndfile);
@@ -65,10 +68,11 @@ bool init_options(int argc, char * const argv[], struct options_s *opts)
     opts->duration = 180;
     opts->fadeout = 5;
     opts->pan = 0.0;
+    opts->equalizer = NULL;
     opts->help = false;
 
     char opt;
-    while ((opt = getopt_long(argc, argv, "o:t:s:d:f:p:h", optspec, 0)) != -1)
+    while ((opt = getopt_long(argc, argv, "o:t:s:d:f:p:e:h", optspec, 0)) != -1)
     {
         switch (opt)
         {
@@ -94,6 +98,13 @@ bool init_options(int argc, char * const argv[], struct options_s *opts)
 
             case 'p':
                 opts->pan = atof(optarg);
+                break;
+
+            case 'e':
+                if (!parse_equalizer_string(optarg, &opts->equalizer))
+                {
+                    return false;
+                }
                 break;
 
             case 'h':
@@ -124,6 +135,24 @@ void free_options(struct options_s *opts)
 {
     free(opts->input);
     free(opts->output);
+    free(opts->equalizer);
+}
+
+bool parse_equalizer_string(const char *str, gme_equalizer_t **equalizer)
+{
+    gme_equalizer_t eq = {0};
+
+    if (sscanf(str, "treble=%lf,bass=%lf", &eq.treble, &eq.bass) != 2)
+    {
+        return false;
+    }
+    else
+    {
+        *equalizer = (gme_equalizer_t *) malloc(sizeof(gme_equalizer_t));
+        memcpy(*equalizer, &eq, sizeof(gme_equalizer_t));
+
+        return true;
+    }
 }
 
 int open_file(const char *path, int mode)
@@ -202,7 +231,7 @@ bool buffer_file(int fd, void **buf, size_t *bufsiz)
     return true;
 }
 
-bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
+bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, gme_equalizer_t const* eq, void (*sample_handler)(short *samplebuf, size_t samplebufsiz, void *ctx), void *ctx)
 {
     short samplebuf[1024];
     int pos;
@@ -212,6 +241,11 @@ bool play(Music_Emu *emu, int track, int duration, int fadeout, double pan, void
     gme_seek(emu, 0);
     gme_set_fade(emu, (duration - fadeout) * 1000L);
     gme_set_stereo_depth(emu, pan);
+
+    if (eq != NULL)
+    {
+        gme_set_equalizer(emu, eq);
+    }
 
     while ((pos = gme_tell(emu)) < duration * 1000L)
     {
@@ -360,7 +394,7 @@ int main(int argc, char * const argv[])
 
                                 if (sndfile != NULL)
                                 {
-                                    play(emu, track, opts.duration, opts.fadeout, opts.pan, write_samples, sndfile);
+                                    play(emu, track, opts.duration, opts.fadeout, opts.pan, opts.equalizer, write_samples, sndfile);
                                     copy_metadata(emu, track, sndfile);
                                     
                                     sf_close(sndfile);
